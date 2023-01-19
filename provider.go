@@ -22,7 +22,7 @@ type Provider struct {
 func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record, error) {
 	zoneInfo, err := p.getZoneInfo(ctx, zone)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot get zone: %w", err)
 	}
 
 	reqURL := fmt.Sprintf("%s/dns_zones/%s/dns_records", baseURL, zoneInfo.ID)
@@ -69,7 +69,7 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
 	zoneInfo, err := p.getZoneInfo(ctx, zone)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot get zone: %w", err)
 	}
 
 	var recs []libdns.Record
@@ -86,7 +86,7 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 			// record ID is required; try to find it with what was provided
 			exactMatches, err := p.getDNSRecords(ctx, zoneInfo, rec, false)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("cannot get existing DNS records: %w", err)
 			}
 			if len(exactMatches) == 0 {
 				return nil, fmt.Errorf("can't find DNS record %s", libdns.AbsoluteName(rec.Name, zoneInfo.Name))
@@ -115,6 +115,9 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 			recs = append(recs, result.libdnsRecord(zone))
 
 			req, err = http.NewRequestWithContext(ctx, "DELETE", reqURL, nil)
+			if err != nil {
+				return nil, err
+			}
 
 			err = p.doAPIRequest(req, false, true, false, true, &result)
 			if err != nil {
@@ -132,7 +135,7 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
 	zoneInfo, err := p.getZoneInfo(ctx, zone)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot get zone: %w", err)
 	}
 
 	var results []libdns.Record
@@ -143,13 +146,13 @@ func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns
 			// the record might already exist, even if we don't know the ID yet
 			matches, err := p.getDNSRecords(ctx, zoneInfo, rec, false)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("cannot get existing DNS records: %w", err)
 			}
 			if len(matches) == 0 {
 				// record doesn't exist; create it
 				result, err := p.createRecord(ctx, zoneInfo, rec)
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("cannot create new record: %w", err)
 				}
 				results = append(results, result.libdnsRecord(zone))
 				continue
@@ -163,7 +166,7 @@ func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns
 		// record exists; update it
 		result, err := p.updateRecord(ctx, oldRec, netlifyRecord(rec))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("cannot update existing record: %w", err)
 		}
 		results = append(results, result.libdnsRecord(zone))
 	}
